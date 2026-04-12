@@ -49,3 +49,64 @@ class TestHealing:
     def test_no_match_returns_none(self):
         result = parse_log_line("{Game Time: }", current_player=None)
         assert result is None
+
+class TestDamageCaused:
+    def test_physical_bludgeoning(self):
+        result = parse_log_line("2d4 bludgeoning = 8 = 8", current_player="Lewys//Moja")
+        assert result == {
+            'type': 'damage_caused',
+            'source': 'Lewys//Moja',
+            'value': 8,
+            'damage_type': 'physical',
+        }
+
+    def test_physical_piercing(self):
+        result = parse_log_line("1d8 piercing = 5 = 5", current_player="Mayk")
+        assert result == {
+            'type': 'damage_caused',
+            'source': 'Mayk',
+            'value': 5,
+            'damage_type': 'physical',
+        }
+
+    def test_physical_complex_expression(self):
+        result = parse_log_line("2 * (1d6 + 3) + 1d8 slashing = 16 = 16", current_player="MAiron")
+        assert result == {
+            'type': 'damage_caused',
+            'source': 'MAiron',
+            'value': 16,
+            'damage_type': 'physical',
+        }
+
+    def test_magical_acid(self):
+        result = parse_log_line("4d6 acid = 13 = 13", current_player="Mario")
+        assert result == {
+            'type': 'damage_caused',
+            'source': 'Mario',
+            'value': 13,
+            'damage_type': 'magical',
+        }
+
+    def test_magical_vitality(self):
+        result = parse_log_line("1d8 vitality = 7 = 7", current_player="Lewys//Moja")
+        assert result == {
+            'type': 'damage_caused',
+            'source': 'Lewys//Moja',
+            'value': 7,
+            'damage_type': 'magical',
+        }
+
+    def test_attack_roll_ignored(self):
+        # 1d20 has the = N = N format but no damage type → must be ignored
+        result = parse_log_line("1d20 = 4 = 4", current_player="MAiron")
+        assert result is None
+
+    def test_untyped_roll_ignored(self):
+        # Roll without explicit damage type → ignore
+        result = parse_log_line("1d8 = 5 = 5", current_player="Lewys//Moja")
+        assert result is None
+
+    def test_no_player_context_ignored(self):
+        # No player context → ignore roll
+        result = parse_log_line("1d8 piercing = 5 = 5", current_player=None)
+        assert result is None
