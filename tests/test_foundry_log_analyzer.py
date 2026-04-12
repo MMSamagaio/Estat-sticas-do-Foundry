@@ -32,3 +32,20 @@ class TestDamageReceived:
     def test_no_match_returns_none(self):
         result = parse_log_line("Timber 2 Cantrip ...", current_player=None)
         assert result is None
+
+class TestHealing:
+    def test_portuguese_simple(self):
+        result = parse_log_line("Lewys//Moja é curado em 5 de dano.", current_player=None)
+        assert result == {'type': 'healing', 'target': 'Lewys//Moja', 'value': 5}
+
+    def test_portuguese_multiword_name(self):
+        result = parse_log_line("Gezras Aep Fin Dabair é curado em 8 de dano.", current_player=None)
+        assert result == {'type': 'healing', 'target': 'Gezras Aep Fin Dabair', 'value': 8}
+
+    def test_english(self):
+        result = parse_log_line("Jobu is healed for 3 damage.", current_player=None)
+        assert result == {'type': 'healing', 'target': 'Jobu', 'value': 3}
+
+    def test_no_match_returns_none(self):
+        result = parse_log_line("{Game Time: }", current_player=None)
+        assert result is None
