@@ -5,31 +5,59 @@ import re
 from collections import defaultdict
 
 # Compile regex patterns once globally for efficiency
-DAMAGE_RECEIVED_PATTERN = re.compile(r"(\w+) takes (\d+) damage")
-DAMAGE_CAUSED_PATTERN = re.compile(r"(\w+) deals (\d+) (physical|magical) damage")
-HEALING_PATTERN = re.compile(r"(\w+) heals (\d+) health")
+HEADER_PATTERN = re.compile(r"^\[[\d/,: APMapm]+\] (.+)$")
+DAMAGE_RECEIVED_PT = re.compile(r"^(.+) recebe (\d+) de dano")
+DAMAGE_RECEIVED_EN = re.compile(r"^(.+) takes (\d+) damage")
+HEALING_PT = re.compile(r"^(.+) é curado em (\d+) de dano")
+HEALING_EN = re.compile(r"^(.+) is healed for (\d+) damage")
+ROLL_RESULT_PATTERN = re.compile(r"^.+ = (\d+) = \d+$")
+DAMAGE_TYPE_PATTERN = re.compile(
+    r"\b(bludgeoning|piercing|slashing|poison|fire|cold|electricity|acid|sonic|mental|vitality|void|force|spirit)\b"
+)
+PHYSICAL_DAMAGE_TYPES = {"bludgeoning", "piercing", "slashing", "poison"}
 
-def parse_log_line(line):
+def parse_log_line(line, current_player=None):
     """
     Parses a single line from the Foundry log file to extract relevant event data.
 
     Args:
         line (str): The log line to parse.
+        current_player (str | None): The name of the player who sent the current
+                                     message block (from the preceding header line).
 
     Returns:
-        dict or None: A dictionary containing event type, source/target,
-                      value, and damage type (if applicable), or None
-                      if the line does not match any known event pattern.
+        dict or None: A dictionary with event data, or None if the line does not
+                      match any known event pattern.
     """
-    if match := DAMAGE_RECEIVED_PATTERN.search(line):
+    if match := DAMAGE_RECEIVED_PT.match(line):
         target, value = match.groups()
         return {'type': 'damage_received', 'target': target, 'value': int(value)}
-    elif match := DAMAGE_CAUSED_PATTERN.search(line):
-        source, value, damage_type = match.groups()
-        return {'type': 'damage_caused', 'source': source, 'value': int(value), 'damage_type': damage_type}
-    elif match := HEALING_PATTERN.search(line):
+
+    if match := DAMAGE_RECEIVED_EN.match(line):
+        target, value = match.groups()
+        return {'type': 'damage_received', 'target': target, 'value': int(value)}
+
+    if match := HEALING_PT.match(line):
         target, value = match.groups()
         return {'type': 'healing', 'target': target, 'value': int(value)}
+
+    if match := HEALING_EN.match(line):
+        target, value = match.groups()
+        return {'type': 'healing', 'target': target, 'value': int(value)}
+
+    if current_player and (match := ROLL_RESULT_PATTERN.match(line)):
+        value = int(match.group(1))
+        damage_type_match = DAMAGE_TYPE_PATTERN.search(line)
+        if damage_type_match:
+            damage_type = damage_type_match.group(1)
+            category = 'physical' if damage_type in PHYSICAL_DAMAGE_TYPES else 'magical'
+            return {
+                'type': 'damage_caused',
+                'source': current_player,
+                'value': value,
+                'damage_type': category,
+            }
+
     return None
 
 def aggregate_stats(events):
