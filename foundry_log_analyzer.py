@@ -5,7 +5,9 @@ import re
 from collections import defaultdict
 
 # Compile regex patterns once globally for efficiency
-HEADER_PATTERN = re.compile(r"^\[[\d/,: APMapm]+\] (.+)$")
+HEADER_PATTERN = re.compile(
+    r"^\[\d{1,2}/\d{1,2}/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+[AP]M\]\s+(.+?)\s*$"
+)
 DAMAGE_RECEIVED_PT = re.compile(r"^(.+?) recebe (\d+) de dano")
 DAMAGE_RECEIVED_EN = re.compile(r"^(.+?) takes (\d+) damage")
 HEALING_PT = re.compile(r"^(.+?) é curado em (\d+) de dano")
@@ -148,19 +150,20 @@ def main():
             if event:
                 events.append(event)
 
-        character_stats = aggregate_stats(events)
-        print("\nResumo da Sessão:")
-        print("-----------------")
-        print()
 
-        for character, stats in character_stats.items():
-            print(f"Personagem {character}:")
-            print(f"  - Dano Causado:")
-            print(f"    - Físico: {stats['damage_caused_physical']}")
-            print(f"    - Mágico: {stats['damage_caused_magical']}")
-            print(f"  - Dano Recebido: {stats['damage_received']}")
-            print(f"  - Cura Realizada: {stats['healing']}")
-            print()
+    character_stats = aggregate_stats(events)
+    print("\nResumo da Sessão:")
+    print("-----------------")
+    print()
+
+    for character, stats in character_stats.items():
+        print(f"Personagem {character}:")
+        print(f"  - Dano Causado:")
+        print(f"    - Físico: {stats['damage_caused_physical']}")
+        print(f"    - Mágico: {stats['damage_caused_magical']}")
+        print(f"  - Dano Recebido: {stats['damage_received']}")
+        print(f"  - Cura Realizada: {stats['healing']}")
+        print()
 
 if __name__ == "__main__":
     main()
