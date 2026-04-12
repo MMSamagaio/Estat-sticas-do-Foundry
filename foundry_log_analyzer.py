@@ -6,10 +6,10 @@ from collections import defaultdict
 
 # Compile regex patterns once globally for efficiency
 HEADER_PATTERN = re.compile(r"^\[[\d/,: APMapm]+\] (.+)$")
-DAMAGE_RECEIVED_PT = re.compile(r"^(.+) recebe (\d+) de dano")
-DAMAGE_RECEIVED_EN = re.compile(r"^(.+) takes (\d+) damage")
-HEALING_PT = re.compile(r"^(.+) é curado em (\d+) de dano")
-HEALING_EN = re.compile(r"^(.+) is healed for (\d+) damage")
+DAMAGE_RECEIVED_PT = re.compile(r"^(.+?) recebe (\d+) de dano")
+DAMAGE_RECEIVED_EN = re.compile(r"^(.+?) takes (\d+) damage")
+HEALING_PT = re.compile(r"^(.+?) é curado em (\d+) de dano")
+HEALING_EN = re.compile(r"^(.+?) is healed for (\d+) damage")
 ROLL_RESULT_PATTERN = re.compile(r"^.+ = (\d+) = \d+$")
 DAMAGE_TYPE_PATTERN = re.compile(
     r"\b(bludgeoning|piercing|slashing|poison|fire|cold|electricity|acid|sonic|mental|vitality|void|force|spirit)\b"
