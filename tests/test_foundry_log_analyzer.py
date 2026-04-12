@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from foundry_log_analyzer import parse_log_line
+from foundry_log_analyzer import parse_log_line, get_player_from_header, aggregate_stats
 
 class TestDamageReceived:
     def test_portuguese_simple(self):
@@ -110,3 +110,50 @@ class TestDamageCaused:
         # No player context → ignore roll
         result = parse_log_line("1d8 piercing = 5 = 5", current_player=None)
         assert result is None
+
+
+class TestGetPlayerFromHeader:
+    def test_detects_header(self):
+        assert get_player_from_header("[5/25/2024, 11:08:53 PM] Lewys//Moja") == "Lewys//Moja"
+
+    def test_detects_header_multiword(self):
+        assert get_player_from_header("[5/25/2024, 10:53:40 PM] Mario") == "Mario"
+
+    def test_non_header_returns_none(self):
+        assert get_player_from_header("MAiron recebe 3 de dano.") is None
+
+    def test_game_time_line_returns_none(self):
+        assert get_player_from_header("{Game Time: }") is None
+
+
+class TestAggregateStats:
+    def test_aggregates_damage_received(self):
+        events = [
+            {'type': 'damage_received', 'target': 'MAiron', 'value': 3},
+            {'type': 'damage_received', 'target': 'MAiron', 'value': 1},
+        ]
+        stats = aggregate_stats(events)
+        assert stats['MAiron']['damage_received'] == 4
+
+    def test_aggregates_healing(self):
+        events = [
+            {'type': 'healing', 'target': 'Lewys//Moja', 'value': 5},
+            {'type': 'healing', 'target': 'Lewys//Moja', 'value': 3},
+        ]
+        stats = aggregate_stats(events)
+        assert stats['Lewys//Moja']['healing'] == 8
+
+    def test_aggregates_physical_damage_caused(self):
+        events = [
+            {'type': 'damage_caused', 'source': 'Mayk', 'value': 7, 'damage_type': 'physical'},
+            {'type': 'damage_caused', 'source': 'Mayk', 'value': 8, 'damage_type': 'physical'},
+        ]
+        stats = aggregate_stats(events)
+        assert stats['Mayk']['damage_caused_physical'] == 15
+
+    def test_aggregates_magical_damage_caused(self):
+        events = [
+            {'type': 'damage_caused', 'source': 'Mario', 'value': 13, 'damage_type': 'magical'},
+        ]
+        stats = aggregate_stats(events)
+        assert stats['Mario']['damage_caused_magical'] == 13

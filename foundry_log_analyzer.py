@@ -101,6 +101,15 @@ def aggregate_stats(events):
             character_stats[target]['healing'] += value
     return character_stats
 
+def get_player_from_header(line):
+    """
+    Returns the player name if the line is a message header, None otherwise.
+
+    Header format: [M/D/YYYY, H:MM:SS AM/PM] PlayerName
+    """
+    match = HEADER_PATTERN.match(line)
+    return match.group(1) if match else None
+
 def main():
     """
     Main function to parse command-line arguments, read the log file,
@@ -126,13 +135,18 @@ def main():
 
     print(f"Successfully validated log file: {log_file_path}")
 
-    with open(log_file_path, 'r') as f:
+    with open(log_file_path, 'r', encoding='utf-8') as f:
         events = []
+        current_player = None
         for line in f:
-            event = parse_log_line(line)
+            line = line.strip()
+            player = get_player_from_header(line)
+            if player:
+                current_player = player
+                continue
+            event = parse_log_line(line, current_player)
             if event:
                 events.append(event)
-        print(f"Parsed events: {events}")
 
         character_stats = aggregate_stats(events)
         print("\nResumo da Sessão:")
