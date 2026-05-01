@@ -2,41 +2,62 @@ import PySimpleGUI as sg
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from foundry_log_analyzer import parse_log_file, aggregate_stats
+import tkinter as tk
+
+
+def get_screen_size():
+    """Returns (width, height) of the primary screen."""
+    root = tk.Tk()
+    root.withdraw()
+    width = root.winfo_screenwidth()
+    height = root.winfo_screenheight()
+    root.destroy()
+    return width, height
 
 
 def create_window():
     """Creates and returns the main application window."""
     sg.theme("DarkBlue13")
 
+    # Get screen size and limit window to 90% of screen
+    screen_w, screen_h = get_screen_size()
+    max_w = int(screen_w * 0.9)
+    max_h = int(screen_h * 0.9)
+
     character_list = ["<Todos>"]
 
     layout = [
         [sg.Text("Foundry Log Analyzer", font=("Helvetica", 16))],
         [sg.Text("Selecione o arquivo de log:")],
-        [sg.Input(key="-FILE-", readonly=True, size=(60, 1)),
+        [sg.Input(key="-FILE-", readonly=True, size=(40, 1)),
          sg.FileBrowse("Procurar", file_types=(("Log Files", "*.txt *.log"), ("All Files", "*.*")))],
         [sg.Button("Analisar", key="-ANALYZE-")],
         [sg.HorizontalSeparator()],
         [sg.Text("Personagem:")],
-        [sg.Combo(character_list, key="-CHAR_SELECT-", size=(30, 1), readonly=True, enable_events=True)],
+        [sg.Combo(character_list, key="-CHAR_SELECT-", size=(25, 1), readonly=True, enable_events=True)],
         [sg.HorizontalSeparator()],
         [sg.Text("Dados:", font=("Helvetica", 12))],
         [sg.Table(
             headings=["Personagem", "Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"],
             key="-TABLE-",
             values=[],
-            size=(70, 10),
-            auto_size_columns=False,
-            col_widths=[15, 12, 12, 15, 10],
+            num_rows=8,
+            auto_size_columns=True,
             justification="left",
             alternating_row_color="gray30",
         )],
         [sg.HorizontalSeparator()],
         [sg.Text("Gráfico:", font=("Helvetica", 12))],
-        [sg.Canvas(key="-CHART-", size=(600, 300))],
+        [sg.Canvas(key="-CHART-", size=(550, 250))],
     ]
 
-    return sg.Window("Foundry Log Analyzer", layout, finalize=True)
+    return sg.Window(
+        "Foundry Log Analyzer",
+        layout,
+        finalize=True,
+        size=(max_w, max_h),
+        resizable=True,
+    )
 
 
 def draw_bar_chart(window, selected_character):
