@@ -5,31 +5,65 @@ import re
 from collections import defaultdict
 
 # Compile regex patterns once globally for efficiency
-DAMAGE_RECEIVED_PATTERN = re.compile(r"(\w+) takes (\d+) damage")
-DAMAGE_CAUSED_PATTERN = re.compile(r"(\w+) deals (\d+) (physical|magical) damage")
-HEALING_PATTERN = re.compile(r"(\w+) heals (\d+) health")
+HEADER_PATTERN = re.compile(
+    r"^\[\d{1,2}/\d{1,2}/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+[AP]M\]\s+(.+?)\s*$"
+)
+DAMAGE_RECEIVED_PT = re.compile(r"^(.+?) recebe (\d+) de dano")
+DAMAGE_RECEIVED_EN = re.compile(r"^(.+?) takes (\d+) damage")
+HEALING_PT = re.compile(r"^(.+?) é curado em (\d+) de dano")
+HEALING_EN = re.compile(r"^(.+?) is healed for (\d+) damage")
+ROLL_RESULT_PATTERN = re.compile(r"^.+ = (\d+) = \d+$")
+ROLL_HEALING = re.compile(r"^Roll Healing")
+ROLL_VITALITY = re.compile(r"vitality", re.IGNORECASE)
+DAMAGE_TYPE_PATTERN = re.compile(
+    r"\b(bludgeoning|piercing|slashing|poison|fire|cold|electricity|acid|sonic|mental|vitality|void|force|spirit)\b"
+)
+PHYSICAL_DAMAGE_TYPES = {"bludgeoning", "piercing", "slashing", "poison"}
 
-def parse_log_line(line):
+def parse_log_line(line, current_player=None):
     """
     Parses a single line from the Foundry log file to extract relevant event data.
 
     Args:
         line (str): The log line to parse.
+        current_player (str | None): The name of the player who sent the current
+                                     message block (from the preceding header line).
 
     Returns:
-        dict or None: A dictionary containing event type, source/target,
-                      value, and damage type (if applicable), or None
-                      if the line does not match any known event pattern.
+        dict or None: A dictionary with event data, or None if the line does not
+                      match any known event pattern.
     """
-    if match := DAMAGE_RECEIVED_PATTERN.search(line):
+    if match := DAMAGE_RECEIVED_PT.match(line):
         target, value = match.groups()
         return {'type': 'damage_received', 'target': target, 'value': int(value)}
-    elif match := DAMAGE_CAUSED_PATTERN.search(line):
-        source, value, damage_type = match.groups()
-        return {'type': 'damage_caused', 'source': source, 'value': int(value), 'damage_type': damage_type}
-    elif match := HEALING_PATTERN.search(line):
+
+    if match := DAMAGE_RECEIVED_EN.match(line):
         target, value = match.groups()
-        return {'type': 'healing', 'target': target, 'value': int(value)}
+        return {'type': 'damage_received', 'target': target, 'value': int(value)}
+
+    if match := HEALING_PT.match(line):
+        target, value = match.groups()
+        source = current_player if current_player else target
+        return {'type': 'healing', 'source': source, 'target': target, 'value': int(value)}
+
+    if match := HEALING_EN.match(line):
+        target, value = match.groups()
+        source = current_player if current_player else target
+        return {'type': 'healing', 'source': source, 'target': target, 'value': int(value)}
+
+    if current_player and (match := ROLL_RESULT_PATTERN.match(line)):
+        value = int(match.group(1))
+        damage_type_match = DAMAGE_TYPE_PATTERN.search(line)
+        if damage_type_match:
+            damage_type = damage_type_match.group(1)
+            category = 'physical' if damage_type in PHYSICAL_DAMAGE_TYPES else 'magical'
+            return {
+                'type': 'damage_caused',
+                'source': current_player,
+                'value': value,
+                'damage_type': category,
+            }
+
     return None
 
 def aggregate_stats(events):
@@ -68,10 +102,78 @@ def aggregate_stats(events):
             elif damage_type == 'magical':
                 character_stats[source]['damage_caused_magical'] += value
         elif event_type == 'healing':
-            target = event['target']
+            source = event['source']
             value = event['value']
-            character_stats[target]['healing'] += value
+            character_stats[source]['healing'] += value
     return character_stats
+
+def get_player_from_header(line):
+    """
+    Returns the player name if the line is a message header, None otherwise.
+
+    Header format: [M/D/YYYY, H:MM:SS AM/PM] PlayerName
+    """
+    match = HEADER_PATTERN.match(line)
+    return match.group(1) if match else None
+
+def parse_log_file(file_path):
+    """
+    Parses a Foundry log file and returns a list of events.
+
+    Args:
+        file_path (str): Path to the Foundry log file.
+
+    Returns:
+        list: A list of event dictionaries with keys: type, source/target, value, damage_type, timestamp.
+    """
+    from datetime import datetime
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        events = []
+        current_player = None
+        healer_context = None  # Track who is casting a healing spell
+
+        for line in f:
+            line = line.strip()
+            player = get_player_from_header(line)
+            if player:
+                current_player = player
+                # Parse timestamp from header
+                header_match = HEADER_PATTERN.match(line)
+                if header_match:
+                    try:
+                        # Format: [M/D/YYYY, H:MM:SS AM/PM] PlayerName
+                        timestamp_str = line.split(']')[0].replace('[', '')
+                        events.append({
+                            'type': 'timestamp',
+                            'timestamp': timestamp_str,
+                            'player': current_player
+                        })
+                    except:
+                        pass
+                continue
+
+            # Check if this is a healing spell roll (sets healer context)
+            if ROLL_HEALING.match(line):
+                healer_context = current_player
+                continue
+
+            # Skip vitality rolls (rest-based healing, not spell-based)
+            if ROLL_VITALITY.match(line):
+                continue
+
+            event = parse_log_line(line, current_player)
+            if event:
+                # For healing events, use healer_context as source if available
+                if event['type'] == 'healing' and healer_context:
+                    event['source'] = healer_context
+                events.append(event)
+
+                # Reset healer context after processing heal event (only once per spell)
+                if event['type'] == 'healing':
+                    healer_context = None
+
+        return events
 
 def main():
     """
@@ -98,27 +200,21 @@ def main():
 
     print(f"Successfully validated log file: {log_file_path}")
 
-    with open(log_file_path, 'r') as f:
-        events = []
-        for line in f:
-            event = parse_log_line(line)
-            if event:
-                events.append(event)
-        print(f"Parsed events: {events}")
+    events = parse_log_file(log_file_path)
 
-        character_stats = aggregate_stats(events)
-        print("\nResumo da Sessão:")
-        print("-----------------")
+    character_stats = aggregate_stats(events)
+    print("\nResumo da Sessão:")
+    print("-----------------")
+    print()
+
+    for character, stats in character_stats.items():
+        print(f"Personagem {character}:")
+        print(f"  - Dano Causado:")
+        print(f"    - Físico: {stats['damage_caused_physical']}")
+        print(f"    - Mágico: {stats['damage_caused_magical']}")
+        print(f"  - Dano Recebido: {stats['damage_received']}")
+        print(f"  - Cura Realizada: {stats['healing']}")
         print()
-
-        for character, stats in character_stats.items():
-            print(f"Personagem {character}:")
-            print(f"  - Dano Causado:")
-            print(f"    - Físico: {stats['damage_caused_physical']}")
-            print(f"    - Mágico: {stats['damage_caused_magical']}")
-            print(f"  - Dano Recebido: {stats['damage_received']}")
-            print(f"  - Cura Realizada: {stats['healing']}")
-            print()
 
 if __name__ == "__main__":
     main()

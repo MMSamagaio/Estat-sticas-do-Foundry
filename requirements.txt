@@ -1,0 +1,2 @@
+PySimpleGUI>=4.60.0
+matplotlib>=3.7.0
