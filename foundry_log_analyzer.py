@@ -14,6 +14,7 @@ HEALING_PT = re.compile(r"^(.+?) é curado em (\d+) de dano")
 HEALING_EN = re.compile(r"^(.+?) is healed for (\d+) damage")
 ROLL_RESULT_PATTERN = re.compile(r"^.+ = (\d+) = \d+$")
 ROLL_HEALING = re.compile(r"^Roll Healing")
+ROLL_VITALITY = re.compile(r"vitality", re.IGNORECASE)
 DAMAGE_TYPE_PATTERN = re.compile(
     r"\b(bludgeoning|piercing|slashing|poison|fire|cold|electricity|acid|sonic|mental|vitality|void|force|spirit)\b"
 )
@@ -155,6 +156,10 @@ def parse_log_file(file_path):
             # Check if this is a healing spell roll (sets healer context)
             if ROLL_HEALING.match(line):
                 healer_context = current_player
+                continue
+
+            # Skip vitality rolls (rest-based healing, not spell-based)
+            if ROLL_VITALITY.match(line):
                 continue
 
             event = parse_log_line(line, current_player)
