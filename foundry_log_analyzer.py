@@ -41,11 +41,11 @@ def parse_log_line(line, current_player=None):
 
     if match := HEALING_PT.match(line):
         target, value = match.groups()
-        return {'type': 'healing', 'target': target, 'value': int(value)}
+        return {'type': 'healing', 'source': current_player, 'target': target, 'value': int(value)}
 
     if match := HEALING_EN.match(line):
         target, value = match.groups()
-        return {'type': 'healing', 'target': target, 'value': int(value)}
+        return {'type': 'healing', 'source': current_player, 'target': target, 'value': int(value)}
 
     if current_player and (match := ROLL_RESULT_PATTERN.match(line)):
         value = int(match.group(1))
@@ -98,9 +98,9 @@ def aggregate_stats(events):
             elif damage_type == 'magical':
                 character_stats[source]['damage_caused_magical'] += value
         elif event_type == 'healing':
-            target = event['target']
+            source = event['source']
             value = event['value']
-            character_stats[target]['healing'] += value
+            character_stats[source]['healing'] += value
     return character_stats
 
 def get_player_from_header(line):

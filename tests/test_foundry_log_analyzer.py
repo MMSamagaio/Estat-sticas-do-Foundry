@@ -36,15 +36,15 @@ class TestDamageReceived:
 class TestHealing:
     def test_portuguese_simple(self):
         result = parse_log_line("Lewys//Moja é curado em 5 de dano.", current_player=None)
-        assert result == {'type': 'healing', 'target': 'Lewys//Moja', 'value': 5}
+        assert result == {'type': 'healing', 'source': None, 'target': 'Lewys//Moja', 'value': 5}
 
     def test_portuguese_multiword_name(self):
         result = parse_log_line("Gezras Aep Fin Dabair é curado em 8 de dano.", current_player=None)
-        assert result == {'type': 'healing', 'target': 'Gezras Aep Fin Dabair', 'value': 8}
+        assert result == {'type': 'healing', 'source': None, 'target': 'Gezras Aep Fin Dabair', 'value': 8}
 
     def test_english(self):
         result = parse_log_line("Jobu is healed for 3 damage.", current_player=None)
-        assert result == {'type': 'healing', 'target': 'Jobu', 'value': 3}
+        assert result == {'type': 'healing', 'source': None, 'target': 'Jobu', 'value': 3}
 
     def test_no_match_returns_none(self):
         result = parse_log_line("{Game Time: }", current_player=None)
@@ -137,11 +137,11 @@ class TestAggregateStats:
 
     def test_aggregates_healing(self):
         events = [
-            {'type': 'healing', 'target': 'Lewys//Moja', 'value': 5},
-            {'type': 'healing', 'target': 'Lewys//Moja', 'value': 3},
+            {'type': 'healing', 'source': 'Mayk', 'target': 'Lewys//Moja', 'value': 5},
+            {'type': 'healing', 'source': 'Mayk', 'target': 'Lewys//Moja', 'value': 3},
         ]
         stats = aggregate_stats(events)
-        assert stats['Lewys//Moja']['healing'] == 8
+        assert stats['Mayk']['healing'] == 8
 
     def test_aggregates_physical_damage_caused(self):
         events = [
