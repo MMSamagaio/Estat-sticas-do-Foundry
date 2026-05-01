@@ -17,34 +17,52 @@ def get_screen_size():
 
 
 def extract_dates_from_log(file_path):
-    """Extracts unique dates from log file headers."""
+    """Extracts unique dates from log file headers, returns as DD/MM/YYYY for display."""
     dates = []
     date_pattern = r"^\[(\d{1,2}/\d{1,2}/\d{4})"
     with open(file_path, 'r', encoding='utf-8') as f:
         for line in f:
             match = __import__('re').search(date_pattern, line)
             if match:
-                date_str = match.group(1)
-                if date_str not in dates:
-                    dates.append(date_str)
+                date_str = match.group(1)  # MM/DD/YYYY
+                # Convert to DD/MM/YYYY for display
+                try:
+                    dt = datetime.strptime(date_str, '%m/%d/%Y')
+                    display_date = dt.strftime('%d/%m/%Y')
+                except:
+                    display_date = date_str
+                if display_date not in dates:
+                    dates.append(display_date)
     return dates
 
 
-def filter_events_by_date(events, start_date):
-    """Filters events to only include those from start_date onwards."""
+def filter_events_by_date(events, display_date):
+    """Filters events to only include those from the given DD/MM/YYYY date."""
     filtered = []
-    start = None
+    # Convert DD/MM/YYYY back to MM/DD/YYYY for comparison with raw events
+    try:
+        dt = datetime.strptime(display_date, '%d/%m/%Y')
+        target_date = dt.strftime('%m/%d/%Y')
+    except:
+        return events
+
     for event in events:
         if event.get('type') == 'timestamp':
-            try:
-                event_date = datetime.strptime(event['timestamp'], '%m/%d/%Y, %I:%M:%S %p')
-                if start is None and event['timestamp'].startswith(start_date):
-                    start = event_date
-            except:
-                pass
+            # Raw timestamp format: [MM/DD/YYYY, H:MM:SS AM/PM]
+            ts = event.get('timestamp', '')
+            if ts.startswith(target_date):
+                filtered.append(event)
             continue
-        if start is not None:
-            filtered.append(event)
+        # Include the event if we're in the right date block
+        if filtered and filtered[-1].get('type') == 'timestamp':
+            last_ts = filtered[-1].get('timestamp', '')
+            if last_ts.startswith(target_date):
+                filtered.append(event)
+            elif not last_ts.startswith(target_date):
+                # We've moved past the target date
+                if len(filtered) > 0 and filtered[-1].get('type') == 'timestamp':
+                    filtered.pop()  # remove the timestamp that started new block
+                break
     return filtered
 
 
@@ -64,10 +82,8 @@ def create_window():
          sg.FileBrowse("Procurar", file_types=(("Log Files", "*.txt *.log"), ("All Files", "*.*")))],
         [sg.Button("Analisar", key="-ANALYZE-")],
         [sg.HorizontalSeparator()],
-        [sg.Text("Filtrar por data:")],
-        [sg.Combo(["<Todos>"], key="-DATE_SELECT-", size=(20, 1), readonly=True, enable_events=True, disabled=True)],
-        [sg.Text("Personagem:")],
-        [sg.Combo(["<Todos>"], key="-CHAR_SELECT-", size=(25, 1), readonly=True, enable_events=True, disabled=True)],
+        [sg.Text("Filtrar por data:"), sg.Combo(["<Todos>"], key="-DATE_SELECT-", size=(15, 1), readonly=True, enable_events=True, disabled=True),
+         sg.Text("  Personagem:"), sg.Combo(["<Todos>"], key="-CHAR_SELECT-", size=(20, 1), readonly=True, enable_events=True, disabled=True)],
         [sg.HorizontalSeparator()],
         [sg.Text("Dados:", font=("Helvetica", 12))],
         [sg.Table(
@@ -102,33 +118,12 @@ def draw_bar_chart(window, selected_character, all_stats):
     for widget in window["-CHART-"].TKCanvas.winfo_children():
         widget.destroy()
 
-    # Get data
-    if selected_character and selected_character != "<Todos>":
-        data = all_stats.get(selected_character, {})
-        labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
-        values = [
-            data.get("damage_caused_physical", 0),
-            data.get("damage_caused_magical", 0),
-            data.get("damage_received", 0),
-            data.get("healing", 0),
-        ]
-        title = f"Estatísticas de {selected_character}"
-    else:
-        labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
-        values = [
-            sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
-            sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
-            sum(s.get("damage_received", 0) for s in all_stats.values()),
-            sum(s.get("healing", 0) for s in all_stats.values()),
-        ]
-        title = "Estatísticas Combinadas"
-
     # Create figure with correct DPI and size
     fig = plt.figure(figsize=(8, 4), dpi=80)
     ax = fig.add_subplot(111)
 
     if selected_character and selected_character != "<Todos>":
-        # Show comparison: Player vs Total
+        # Show comparison: Player vs Total (filtered total for the date)
         total_data = all_stats.get(selected_character, {})
         labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura"]
         player_vals = [
@@ -201,9 +196,9 @@ def parse_and_display(window, file_path):
     try:
         events = parse_log_file(file_path)
 
-        # Extract available dates
+        # Extract available dates (displayed as DD/MM/YYYY)
         dates = extract_dates_from_log(file_path)
-        dates = ["<Todos>"] + sorted(dates, key=lambda x: datetime.strptime(x, '%m/%d/%Y'), reverse=True)
+        dates = ["<Todos>"] + sorted(dates, key=lambda x: datetime.strptime(x, '%d/%m/%Y'), reverse=True)
 
         # Store raw events for filtering
         window.metadata = {
@@ -235,14 +230,18 @@ def update_display(window):
 
     # Filter by date if not "Todos"
     if selected_date and selected_date != "<Todos>":
-        events = filter_events_by_date(events, selected_date)
-        stats = aggregate_stats(events)
+        filtered_events = filter_events_by_date(events, selected_date)
+        # Get only actual game events (not timestamp events)
+        game_events = [e for e in filtered_events if e.get('type') != 'timestamp']
+        stats = aggregate_stats(game_events)
     else:
         stats = metadata['stats']
 
-    # Update character dropdown
+    # Update character dropdown - only show characters active in filtered data
     characters = ["<Todos>"] + list(stats.keys())
-    window["-CHAR_SELECT-"].update(values=characters, value="<Todos>" if selected_char not in characters else selected_char, disabled=False)
+    if selected_char not in characters:
+        selected_char = "<Todos>"
+    window["-CHAR_SELECT-"].update(values=characters, value=selected_char, disabled=False)
 
     # Build table rows
     table_rows = []
