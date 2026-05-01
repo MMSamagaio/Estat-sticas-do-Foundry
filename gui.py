@@ -1,9 +1,14 @@
 import PySimpleGUI as sg
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from foundry_log_analyzer import parse_log_file, aggregate_stats
+
 
 def create_window():
     """Creates and returns the main application window."""
     sg.theme("DarkBlue13")
+
+    character_list = ["<Todos>"]
 
     layout = [
         [sg.Text("Foundry Log Analyzer", font=("Helvetica", 16))],
@@ -12,35 +17,102 @@ def create_window():
          sg.FileBrowse("Procurar", file_types=(("Log Files", "*.txt *.log"), ("All Files", "*.*")))],
         [sg.Button("Analisar", key="-ANALYZE-")],
         [sg.HorizontalSeparator()],
-        [sg.Text("Resultados:", font=("Helvetica", 12))],
-        [sg.Multiline(key="-OUTPUT-", size=(70, 20), disabled=True, autoscroll=True)],
+        [sg.Text("Personagem:")],
+        [sg.Combo(character_list, key="-CHAR_SELECT-", size=(30, 1), readonly=True, enable_events=True)],
+        [sg.HorizontalSeparator()],
+        [sg.Text("Dados:", font=("Helvetica", 12))],
+        [sg.Table(
+            headings=["Personagem", "Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"],
+            key="-TABLE-",
+            values=[],
+            size=(70, 10),
+            auto_size_columns=False,
+            col_widths=[15, 12, 12, 15, 10],
+            justification="left",
+            alternating_row_color="gray30",
+        )],
+        [sg.HorizontalSeparator()],
+        [sg.Text("Gráfico:", font=("Helvetica", 12))],
+        [sg.Canvas(key="-CHART-", size=(600, 300))],
     ]
 
     return sg.Window("Foundry Log Analyzer", layout, finalize=True)
 
 
+def draw_bar_chart(window, selected_character):
+    """Draws bar chart for selected character or all combined."""
+    stats = window.metadata
+    if not stats:
+        return
+
+    # Get data
+    if selected_character and selected_character != "<Todos>":
+        data = stats.get(selected_character, {})
+        labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
+        values = [
+            data.get("damage_caused_physical", 0),
+            data.get("damage_caused_magical", 0),
+            data.get("damage_received", 0),
+            data.get("healing", 0),
+        ]
+        title = f"Estatísticas de {selected_character}"
+    else:
+        labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
+        values = [
+            sum(s.get("damage_caused_physical", 0) for s in stats.values()),
+            sum(s.get("damage_caused_magical", 0) for s in stats.values()),
+            sum(s.get("damage_received", 0) for s in stats.values()),
+            sum(s.get("healing", 0) for s in stats.values()),
+        ]
+        title = "Estatísticas Combinadas"
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(6, 3))
+    bars = ax.bar(labels, values, color=["#e74c3c", "#3498db", "#e67e22", "#2ecc71"])
+    ax.set_title(title, fontsize=10)
+    ax.set_ylabel("Valor")
+    for bar, val in zip(bars, values):
+        if val > 0:
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(),
+                    str(val), ha="center", va="bottom", fontsize=8)
+    plt.tight_layout()
+
+    # Embed in Canvas
+    canvas = window["-CHART-"]
+    figure_canvas = FigureCanvasTkAgg(fig, master=canvas.TKCanvas)
+    figure_canvas.draw()
+    figure_canvas.get_tk_widget().pack(fill="both", expand=True)
+
+
 def parse_and_display(window, file_path):
-    """Parses log file and updates the output Multiline element."""
+    """Parses log file, updates dropdown, table, and draws chart."""
     try:
         events = parse_log_file(file_path)
         stats = aggregate_stats(events)
 
-        output_lines = []
-        output_lines.append("Resumo da Sessão:\n")
-        output_lines.append("-" * 20 + "\n\n")
+        # Update dropdown
+        characters = ["<Todos>"] + list(stats.keys())
+        window["-CHAR_SELECT-"].update(values=characters, value="<Todos>")
 
+        # Build table rows
+        table_rows = []
         for character, s in stats.items():
-            output_lines.append(f"Personagem: {character}")
-            output_lines.append(f"  - Dano Causado:")
-            output_lines.append(f"    - Físico: {s['damage_caused_physical']}")
-            output_lines.append(f"    - Mágico: {s['damage_caused_magical']}")
-            output_lines.append(f"  - Dano Recebido: {s['damage_received']}")
-            output_lines.append(f"  - Cura Realizada: {s['healing']}")
-            output_lines.append("")
+            table_rows.append([
+                character,
+                s["damage_caused_physical"],
+                s["damage_caused_magical"],
+                s["damage_received"],
+                s["healing"],
+            ])
 
-        window["-OUTPUT-"].update("".join(output_lines))
+        window["-TABLE-"].update(values=table_rows)
+        window.metadata = stats
+
+        # Draw initial chart
+        draw_bar_chart(window, None)
+
     except Exception as e:
-        window["-OUTPUT-"].update(f"Erro ao analisar: {str(e)}")
+        sg.popup(f"Erro ao analisar: {str(e)}")
 
 
 def main():
@@ -58,7 +130,12 @@ def main():
             if file_path:
                 parse_and_display(window, file_path)
             else:
-                window["-OUTPUT-"].update("Selecione um arquivo primeiro.")
+                sg.popup("Selecione um arquivo primeiro.")
+
+        if event == "-CHAR_SELECT-":
+            selected = values["-CHAR_SELECT-"]
+            if selected and window.metadata:
+                draw_bar_chart(window, selected)
 
     window.close()
 
