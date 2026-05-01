@@ -137,12 +137,24 @@ def parse_log_file(file_path):
             player = get_player_from_header(line)
             if player:
                 current_player = player
+                # Parse timestamp from header
+                header_match = HEADER_PATTERN.match(line)
+                if header_match:
+                    try:
+                        # Format: [M/D/YYYY, H:MM:SS AM/PM] PlayerName
+                        timestamp_str = line.split(']')[0].replace('[', '')
+                        events.append({
+                            'type': 'timestamp',
+                            'timestamp': timestamp_str,
+                            'player': current_player
+                        })
+                    except:
+                        pass
                 continue
 
             # Check if this is a healing spell roll (sets healer context)
             if ROLL_HEALING.match(line):
                 healer_context = current_player
-                events.append({'type': 'timestamp', 'timestamp': '', 'player': current_player})
                 continue
 
             event = parse_log_line(line, current_player)
