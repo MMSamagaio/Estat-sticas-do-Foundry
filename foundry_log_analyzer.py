@@ -13,6 +13,7 @@ DAMAGE_RECEIVED_EN = re.compile(r"^(.+?) takes (\d+) damage")
 HEALING_PT = re.compile(r"^(.+?) é curado em (\d+) de dano")
 HEALING_EN = re.compile(r"^(.+?) is healed for (\d+) damage")
 ROLL_RESULT_PATTERN = re.compile(r"^.+ = (\d+) = \d+$")
+ROLL_HEALING = re.compile(r"^Roll Healing")
 DAMAGE_TYPE_PATTERN = re.compile(
     r"\b(bludgeoning|piercing|slashing|poison|fire|cold|electricity|acid|sonic|mental|vitality|void|force|spirit)\b"
 )
@@ -41,11 +42,13 @@ def parse_log_line(line, current_player=None):
 
     if match := HEALING_PT.match(line):
         target, value = match.groups()
-        return {'type': 'healing', 'source': current_player, 'target': target, 'value': int(value)}
+        source = current_player if current_player else target
+        return {'type': 'healing', 'source': source, 'target': target, 'value': int(value)}
 
     if match := HEALING_EN.match(line):
         target, value = match.groups()
-        return {'type': 'healing', 'source': current_player, 'target': target, 'value': int(value)}
+        source = current_player if current_player else target
+        return {'type': 'healing', 'source': source, 'target': target, 'value': int(value)}
 
     if current_player and (match := ROLL_RESULT_PATTERN.match(line)):
         value = int(match.group(1))
@@ -127,28 +130,32 @@ def parse_log_file(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         events = []
         current_player = None
+        healer_context = None  # Track who is casting a healing spell
+
         for line in f:
             line = line.strip()
             player = get_player_from_header(line)
             if player:
                 current_player = player
-                # Parse timestamp from header
-                header_match = HEADER_PATTERN.match(line)
-                if header_match:
-                    try:
-                        # Format: [M/D/YYYY, H:MM:SS AM/PM] PlayerName
-                        timestamp_str = line.split(']')[0].replace('[', '')
-                        events.append({
-                            'type': 'timestamp',
-                            'timestamp': timestamp_str,
-                            'player': current_player
-                        })
-                    except:
-                        pass
                 continue
+
+            # Check if this is a healing spell roll (sets healer context)
+            if ROLL_HEALING.match(line):
+                healer_context = current_player
+                events.append({'type': 'timestamp', 'timestamp': '', 'player': current_player})
+                continue
+
             event = parse_log_line(line, current_player)
             if event:
+                # For healing events, use healer_context as source if available
+                if event['type'] == 'healing' and healer_context:
+                    event['source'] = healer_context
                 events.append(event)
+
+                # Reset healer context after processing heal event (only once per spell)
+                if event['type'] == 'healing':
+                    healer_context = None
+
         return events
 
 def main():
