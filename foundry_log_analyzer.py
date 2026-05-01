@@ -120,8 +120,10 @@ def parse_log_file(file_path):
         file_path (str): Path to the Foundry log file.
 
     Returns:
-        list: A list of event dictionaries with keys: type, source/target, value, damage_type.
+        list: A list of event dictionaries with keys: type, source/target, value, damage_type, timestamp.
     """
+    from datetime import datetime
+
     with open(file_path, 'r', encoding='utf-8') as f:
         events = []
         current_player = None
@@ -130,6 +132,19 @@ def parse_log_file(file_path):
             player = get_player_from_header(line)
             if player:
                 current_player = player
+                # Parse timestamp from header
+                header_match = HEADER_PATTERN.match(line)
+                if header_match:
+                    try:
+                        # Format: [M/D/YYYY, H:MM:SS AM/PM] PlayerName
+                        timestamp_str = line.split(']')[0].replace('[', '')
+                        events.append({
+                            'type': 'timestamp',
+                            'timestamp': timestamp_str,
+                            'player': current_player
+                        })
+                    except:
+                        pass
                 continue
             event = parse_log_line(line, current_player)
             if event:

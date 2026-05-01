@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from foundry_log_analyzer import parse_log_file, aggregate_stats
 import tkinter as tk
+from datetime import datetime
 
 
 def get_screen_size():
@@ -15,6 +16,38 @@ def get_screen_size():
     return width, height
 
 
+def extract_dates_from_log(file_path):
+    """Extracts unique dates from log file headers."""
+    dates = []
+    date_pattern = r"^\[(\d{1,2}/\d{1,2}/\d{4})"
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            match = __import__('re').search(date_pattern, line)
+            if match:
+                date_str = match.group(1)
+                if date_str not in dates:
+                    dates.append(date_str)
+    return dates
+
+
+def filter_events_by_date(events, start_date):
+    """Filters events to only include those from start_date onwards."""
+    filtered = []
+    start = None
+    for event in events:
+        if event.get('type') == 'timestamp':
+            try:
+                event_date = datetime.strptime(event['timestamp'], '%m/%d/%Y, %I:%M:%S %p')
+                if start is None and event['timestamp'].startswith(start_date):
+                    start = event_date
+            except:
+                pass
+            continue
+        if start is not None:
+            filtered.append(event)
+    return filtered
+
+
 def create_window():
     """Creates and returns the main application window."""
     sg.theme("DarkBlue13")
@@ -24,8 +57,6 @@ def create_window():
     max_w = int(screen_w * 0.9)
     max_h = int(screen_h * 0.9)
 
-    character_list = ["<Todos>"]
-
     layout = [
         [sg.Text("Foundry Log Analyzer", font=("Helvetica", 16))],
         [sg.Text("Selecione o arquivo de log:")],
@@ -33,8 +64,10 @@ def create_window():
          sg.FileBrowse("Procurar", file_types=(("Log Files", "*.txt *.log"), ("All Files", "*.*")))],
         [sg.Button("Analisar", key="-ANALYZE-")],
         [sg.HorizontalSeparator()],
+        [sg.Text("Filtrar por data:")],
+        [sg.Combo(["<Todos>"], key="-DATE_SELECT-", size=(20, 1), readonly=True, enable_events=True, disabled=True)],
         [sg.Text("Personagem:")],
-        [sg.Combo(character_list, key="-CHAR_SELECT-", size=(25, 1), readonly=True, enable_events=True)],
+        [sg.Combo(["<Todos>"], key="-CHAR_SELECT-", size=(25, 1), readonly=True, enable_events=True, disabled=True)],
         [sg.HorizontalSeparator()],
         [sg.Text("Dados:", font=("Helvetica", 12))],
         [sg.Table(
@@ -48,7 +81,7 @@ def create_window():
         )],
         [sg.HorizontalSeparator()],
         [sg.Text("Gráfico:", font=("Helvetica", 12))],
-        [sg.Canvas(key="-CHART-", size=(550, 250))],
+        [sg.Canvas(key="-CHART-", size=(600, 280))],
     ]
 
     return sg.Window(
@@ -60,15 +93,18 @@ def create_window():
     )
 
 
-def draw_bar_chart(window, selected_character):
+def draw_bar_chart(window, selected_character, all_stats):
     """Draws bar chart for selected character or all combined."""
-    stats = window.metadata
-    if not stats:
+    if not all_stats:
         return
+
+    # Clear previous chart
+    for widget in window["-CHART-"].TKCanvas.winfo_children():
+        widget.destroy()
 
     # Get data
     if selected_character and selected_character != "<Todos>":
-        data = stats.get(selected_character, {})
+        data = all_stats.get(selected_character, {})
         labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
         values = [
             data.get("damage_caused_physical", 0),
@@ -80,65 +116,156 @@ def draw_bar_chart(window, selected_character):
     else:
         labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
         values = [
-            sum(s.get("damage_caused_physical", 0) for s in stats.values()),
-            sum(s.get("damage_caused_magical", 0) for s in stats.values()),
-            sum(s.get("damage_received", 0) for s in stats.values()),
-            sum(s.get("healing", 0) for s in stats.values()),
+            sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
+            sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
+            sum(s.get("damage_received", 0) for s in all_stats.values()),
+            sum(s.get("healing", 0) for s in all_stats.values()),
         ]
         title = "Estatísticas Combinadas"
 
-    # Create figure
-    fig, ax = plt.subplots(figsize=(6, 3))
-    bars = ax.bar(labels, values, color=["#e74c3c", "#3498db", "#e67e22", "#2ecc71"])
-    ax.set_title(title, fontsize=10)
-    ax.set_ylabel("Valor")
-    for bar, val in zip(bars, values):
-        if val > 0:
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(),
-                    str(val), ha="center", va="bottom", fontsize=8)
-    plt.tight_layout()
+    # Create figure with correct DPI and size
+    fig = plt.figure(figsize=(7, 3), dpi=80)
+    ax = fig.add_subplot(111)
+
+    if selected_character and selected_character != "<Todos>":
+        # Show comparison: Player vs Total
+        total_data = all_stats.get(selected_character, {})
+        labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura"]
+        player_vals = [
+            total_data.get("damage_caused_physical", 0),
+            total_data.get("damage_caused_magical", 0),
+            total_data.get("damage_received", 0),
+            total_data.get("healing", 0),
+        ]
+        total_vals = [
+            sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
+            sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
+            sum(s.get("damage_received", 0) for s in all_stats.values()),
+            sum(s.get("healing", 0) for s in all_stats.values()),
+        ]
+
+        x = range(len(labels))
+        width = 0.35
+        bars1 = ax.bar([i - width/2 for i in x], player_vals, width, label=selected_character, color="#3498db")
+        bars2 = ax.bar([i + width/2 for i in x], total_vals, width, label="Total", color="#95a5a6")
+
+        ax.set_title(f"{selected_character} vs Total", fontsize=10)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels)
+        ax.legend()
+
+        # Add value labels
+        for bar, val in zip(bars1, player_vals):
+            if val > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        str(val), ha="center", va="bottom", fontsize=8)
+        for bar, val in zip(bars2, total_vals):
+            if val > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        str(val), ha="center", va="bottom", fontsize=8)
+
+        ax.set_ylabel("Valor")
+        max_val = max(max(player_vals), max(total_vals)) if player_vals or total_vals else 10
+        ax.set_ylim(0, max_val * 1.2)
+    else:
+        # Show all combined
+        values = [
+            sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
+            sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
+            sum(s.get("damage_received", 0) for s in all_stats.values()),
+            sum(s.get("healing", 0) for s in all_stats.values()),
+        ]
+        labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
+        bars = ax.bar(labels, values, color=["#e74c3c", "#3498db", "#e67e22", "#2ecc71"])
+        ax.set_title("Estatísticas Combinadas", fontsize=10)
+        ax.set_ylabel("Valor")
+        max_val = max(values) if values else 10
+        ax.set_ylim(0, max_val * 1.2)
+        for bar, val in zip(bars, values):
+            if val > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        str(val), ha="center", va="bottom", fontsize=9)
+
+    fig.tight_layout()
 
     # Embed in Canvas
     canvas = window["-CHART-"]
     figure_canvas = FigureCanvasTkAgg(fig, master=canvas.TKCanvas)
     figure_canvas.draw()
     figure_canvas.get_tk_widget().pack(fill="both", expand=True)
+    plt.close(fig)
 
 
 def parse_and_display(window, file_path):
-    """Parses log file, updates dropdown, table, and draws chart."""
+    """Parses log file, updates dropdowns, table, and draws chart."""
     try:
         events = parse_log_file(file_path)
-        stats = aggregate_stats(events)
 
-        # Update dropdown
-        characters = ["<Todos>"] + list(stats.keys())
-        window["-CHAR_SELECT-"].update(values=characters, value="<Todos>")
+        # Extract available dates
+        dates = extract_dates_from_log(file_path)
+        dates = ["<Todos>"] + sorted(dates, key=lambda x: datetime.strptime(x, '%m/%d/%Y'), reverse=True)
 
-        # Build table rows
-        table_rows = []
-        for character, s in stats.items():
-            table_rows.append([
-                character,
-                s["damage_caused_physical"],
-                s["damage_caused_magical"],
-                s["damage_received"],
-                s["healing"],
-            ])
+        # Store raw events for filtering
+        window.metadata = {
+            'events': events,
+            'stats': aggregate_stats([e for e in events if e.get('type') != 'timestamp'])
+        }
 
-        window["-TABLE-"].update(values=table_rows)
-        window.metadata = stats
+        # Update date dropdown
+        window["-DATE_SELECT-"].update(values=dates, value="<Todos>", disabled=False)
 
-        # Draw initial chart
-        draw_bar_chart(window, None)
+        # Initial display (all data)
+        update_display(window)
 
     except Exception as e:
         sg.popup(f"Erro ao analisar: {str(e)}")
 
 
+def update_display(window):
+    """Updates table and chart based on current filters."""
+    metadata = window.metadata
+    if not metadata:
+        return
+
+    selected_date = values.get("-DATE_SELECT-", "<Todos>")
+    selected_char = values.get("-CHAR_SELECT-", "<Todos>")
+
+    events = metadata['events']
+    stats = metadata['stats']
+
+    # Filter by date if not "Todos"
+    if selected_date and selected_date != "<Todos>":
+        events = filter_events_by_date(events, selected_date)
+        stats = aggregate_stats(events)
+    else:
+        stats = metadata['stats']
+
+    # Update character dropdown
+    characters = ["<Todos>"] + list(stats.keys())
+    window["-CHAR_SELECT-"].update(values=characters, value="<Todos>" if selected_char not in characters else selected_char, disabled=False)
+
+    # Build table rows
+    table_rows = []
+    for character, s in stats.items():
+        table_rows.append([
+            character,
+            s["damage_caused_physical"],
+            s["damage_caused_magical"],
+            s["damage_received"],
+            s["healing"],
+        ])
+
+    window["-TABLE-"].update(values=table_rows)
+
+    # Draw chart
+    draw_bar_chart(window, selected_char, stats)
+
+
 def main():
     """Main event loop for the GUI application."""
     window = create_window()
+    global values
+    values = {}
 
     while True:
         event, values = window.read()
@@ -153,10 +280,9 @@ def main():
             else:
                 sg.popup("Selecione um arquivo primeiro.")
 
-        if event == "-CHAR_SELECT-":
-            selected = values["-CHAR_SELECT-"]
-            if selected and window.metadata:
-                draw_bar_chart(window, selected)
+        if event in ("-DATE_SELECT-", "-CHAR_SELECT-"):
+            if window.metadata:
+                update_display(window)
 
     window.close()
 
