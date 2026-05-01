@@ -112,6 +112,30 @@ def get_player_from_header(line):
     match = HEADER_PATTERN.match(line)
     return match.group(1) if match else None
 
+def parse_log_file(file_path):
+    """
+    Parses a Foundry log file and returns a list of events.
+
+    Args:
+        file_path (str): Path to the Foundry log file.
+
+    Returns:
+        list: A list of event dictionaries with keys: type, source/target, value, damage_type.
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        events = []
+        current_player = None
+        for line in f:
+            line = line.strip()
+            player = get_player_from_header(line)
+            if player:
+                current_player = player
+                continue
+            event = parse_log_line(line, current_player)
+            if event:
+                events.append(event)
+        return events
+
 def main():
     """
     Main function to parse command-line arguments, read the log file,
@@ -137,19 +161,7 @@ def main():
 
     print(f"Successfully validated log file: {log_file_path}")
 
-    with open(log_file_path, 'r', encoding='utf-8') as f:
-        events = []
-        current_player = None
-        for line in f:
-            line = line.strip()
-            player = get_player_from_header(line)
-            if player:
-                current_player = player
-                continue
-            event = parse_log_line(line, current_player)
-            if event:
-                events.append(event)
-
+    events = parse_log_file(log_file_path)
 
     character_stats = aggregate_stats(events)
     print("\nResumo da Sessão:")
