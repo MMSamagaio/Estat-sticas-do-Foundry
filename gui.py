@@ -94,17 +94,28 @@ def create_window():
         [sg.Button("Analisar", key="-ANALYZE-")],
         [sg.HorizontalSeparator()],
         [sg.Text("Filtrar por data:"), sg.Combo(["<Todos>"], key="-DATE_SELECT-", size=(15, 1), readonly=True, enable_events=True, disabled=True),
-         sg.Text("  Personagem:"), sg.Combo(["<Todos>"], key="-CHAR_SELECT-", size=(20, 1), readonly=True, enable_events=True, disabled=True)],
+         sg.Text("  Personagem:"), sg.Combo(["<Todos>"], key="-CHAR_SELECT-", size=(20, 1), readonly=True, enable_events=True, disabled=True),
+         sg.Text("  Comparar com:"), sg.Combo(["<Nenhum>"], key="-COMPARE-", size=(20, 1), readonly=True, enable_events=True, disabled=True)],
         [sg.HorizontalSeparator()],
         [sg.Text("Dados:", font=("Helvetica", 12))],
         [sg.Table(
-            headings=["Personagem", "Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"],
+            headings=["Personagem", "Dano Físico", "Dano Mágico", "Dano Recebido", "Cura", "d20 Total", "1s", "20s"],
             key="-TABLE-",
             values=[],
             num_rows=8,
             auto_size_columns=True,
             justification="left",
             alternating_row_color="gray30",
+        ),
+        sg.Table(
+            headings=["Estatística", "", ""],
+            key="-COMPARE_TABLE-",
+            values=[],
+            num_rows=8,
+            auto_size_columns=True,
+            justification="left",
+            alternating_row_color="gray30",
+            visible=False,
         )],
         [sg.HorizontalSeparator()],
         [sg.Text("Gráfico:", font=("Helvetica", 12))],
@@ -235,6 +246,7 @@ def update_display(window):
 
     selected_date = values.get("-DATE_SELECT-", "<Todos>")
     selected_char = values.get("-CHAR_SELECT-", "<Todos>")
+    compare_char = values.get("-COMPARE-", "<Nenhum>")
 
     events = metadata['events']
     stats = metadata['stats']
@@ -254,6 +266,13 @@ def update_display(window):
         selected_char = "<Todos>"
     window["-CHAR_SELECT-"].update(values=characters, value=selected_char, disabled=False)
 
+    # Update compare dropdown - only enabled when a specific character is selected
+    if selected_char and selected_char != "<Todos>":
+        compare_options = ["<Nenhum>"] + [c for c in stats.keys() if c != selected_char]
+        window["-COMPARE-"].update(values=compare_options, value="<Nenhum>", disabled=False)
+    else:
+        window["-COMPARE-"].update(values=["<Nenhum>"], value="<Nenhum>", disabled=True)
+
     # Build table rows
     table_rows = []
     for character, s in stats.items():
@@ -263,12 +282,42 @@ def update_display(window):
             s["damage_caused_magical"],
             s["damage_received"],
             s["healing"],
+            s.get("d20_total", 0),
+            s.get("d20_ones", 0),
+            s.get("d20_twenties", 0),
         ])
 
-    window["-TABLE-"].update(values=table_rows)
+    # Show normal table or comparison table
+    if compare_char and compare_char != "<Nenhum>":
+        compare_rows = build_comparison_rows(selected_char, compare_char, stats)
+        window["-TABLE-"].update(visible=False)
+        window["-COMPARE_TABLE-"].update(
+            headings=["Estatística", selected_char, compare_char],
+            values=compare_rows,
+            visible=True
+        )
+    else:
+        window["-TABLE-"].update(values=table_rows, visible=True)
+        window["-COMPARE_TABLE-"].update(visible=False)
 
     # Draw chart
     draw_bar_chart(window, selected_char, stats)
+
+
+def build_comparison_rows(char1, char2, stats):
+    """Builds side-by-side comparison rows for two characters."""
+    s1 = stats.get(char1, {})
+    s2 = stats.get(char2, {})
+
+    return [
+        ["Dano Físico", s1.get("damage_caused_physical", 0), s2.get("damage_caused_physical", 0)],
+        ["Dano Mágico", s1.get("damage_caused_magical", 0), s2.get("damage_caused_magical", 0)],
+        ["Dano Recebido", s1.get("damage_received", 0), s2.get("damage_received", 0)],
+        ["Cura", s1.get("healing", 0), s2.get("healing", 0)],
+        ["d20 Total", s1.get("d20_total", 0), s2.get("d20_total", 0)],
+        ["1s", s1.get("d20_ones", 0), s2.get("d20_ones", 0)],
+        ["20s", s1.get("d20_twenties", 0), s2.get("d20_twenties", 0)],
+    ]
 
 
 def main():
@@ -290,7 +339,7 @@ def main():
             else:
                 sg.popup("Selecione um arquivo primeiro.")
 
-        if event in ("-DATE_SELECT-", "-CHAR_SELECT-"):
+        if event in ("-DATE_SELECT-", "-CHAR_SELECT-", "-COMPARE-"):
             if window.metadata:
                 update_display(window)
 
