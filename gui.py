@@ -18,51 +18,62 @@ def get_screen_size():
 
 def extract_dates_from_log(file_path):
     """Extracts unique dates from log file headers, returns as DD/MM/YYYY for display."""
+    import re
     dates = []
-    date_pattern = r"^\[(\d{1,2}/\d{1,2}/\d{4})"
+    date_pattern = r"^\[(\d+/\d+/\d+)"
     with open(file_path, 'r', encoding='utf-8') as f:
         for line in f:
-            match = __import__('re').search(date_pattern, line)
+            match = re.search(date_pattern, line)
             if match:
-                date_str = match.group(1)  # MM/DD/YYYY
-                # Convert to DD/MM/YYYY for display
-                try:
-                    dt = datetime.strptime(date_str, '%m/%d/%Y')
-                    display_date = dt.strftime('%d/%m/%Y')
-                except:
-                    display_date = date_str
-                if display_date not in dates:
-                    dates.append(display_date)
+                raw_date = match.group(1)  # M/D/YYYY or MM/DD/YYYY
+                # Normalize to M/D/YYYY format for consistent handling
+                parts = raw_date.split('/')
+                if len(parts) == 3:
+                    month, day, year = parts
+                    month = str(int(month))  # Remove leading zeros
+                    day = str(int(day))
+                    raw_normalized = f"{month}/{day}/{year}"
+
+                    # Convert to DD/MM/YYYY for display
+                    try:
+                        dt = datetime.strptime(raw_normalized, '%m/%d/%Y')
+                        display_date = dt.strftime('%d/%m/%Y')
+                    except:
+                        display_date = raw_date
+
+                    if display_date not in dates:
+                        dates.append(display_date)
     return dates
 
 
 def filter_events_by_date(events, display_date):
     """Filters events to only include those from the given DD/MM/YYYY date."""
-    filtered = []
-    # Convert DD/MM/YYYY back to MM/DD/YYYY for comparison with raw events
+    import re
+    if display_date == "<Todos>":
+        return events
+
+    # Convert DD/MM/YYYY to M/D/YYYY for raw comparison
     try:
         dt = datetime.strptime(display_date, '%d/%m/%Y')
-        target_date = dt.strftime('%m/%d/%Y')
+        target_normalized = dt.strftime('%-m/%-d/%Y')  # No leading zeros
     except:
         return events
 
+    filtered = []
+    target_prefix = f"{target_normalized},"  # Format: '5/25/2024,'
+
     for event in events:
         if event.get('type') == 'timestamp':
-            # Raw timestamp format: [MM/DD/YYYY, H:MM:SS AM/PM]
             ts = event.get('timestamp', '')
-            if ts.startswith(target_date):
+            if ts.startswith(target_prefix):
                 filtered.append(event)
-            continue
-        # Include the event if we're in the right date block
-        if filtered and filtered[-1].get('type') == 'timestamp':
-            last_ts = filtered[-1].get('timestamp', '')
-            if last_ts.startswith(target_date):
-                filtered.append(event)
-            elif not last_ts.startswith(target_date):
+            elif filtered:
                 # We've moved past the target date
-                if len(filtered) > 0 and filtered[-1].get('type') == 'timestamp':
-                    filtered.pop()  # remove the timestamp that started new block
                 break
+            continue
+        if filtered:
+            filtered.append(event)
+
     return filtered
 
 
@@ -97,7 +108,7 @@ def create_window():
         )],
         [sg.HorizontalSeparator()],
         [sg.Text("Gráfico:", font=("Helvetica", 12))],
-        [sg.Canvas(key="-CHART-", size=(650, 350))],
+        [sg.Canvas(key="-CHART-", size=(650, 400))],
     ]
 
     return sg.Window(
@@ -119,7 +130,7 @@ def draw_bar_chart(window, selected_character, all_stats):
         widget.destroy()
 
     # Create figure with correct DPI and size
-    fig = plt.figure(figsize=(8, 4), dpi=80)
+    fig = plt.figure(figsize=(8, 5), dpi=80)
     ax = fig.add_subplot(111)
 
     if selected_character and selected_character != "<Todos>":
