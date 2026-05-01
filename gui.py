@@ -81,7 +81,7 @@ def create_window():
         )],
         [sg.HorizontalSeparator()],
         [sg.Text("Gráfico:", font=("Helvetica", 12))],
-        [sg.Canvas(key="-CHART-", size=(600, 280))],
+        [sg.Canvas(key="-CHART-", size=(650, 350))],
     ]
 
     return sg.Window(
@@ -124,7 +124,7 @@ def draw_bar_chart(window, selected_character, all_stats):
         title = "Estatísticas Combinadas"
 
     # Create figure with correct DPI and size
-    fig = plt.figure(figsize=(7, 3), dpi=80)
+    fig = plt.figure(figsize=(8, 4), dpi=80)
     ax = fig.add_subplot(111)
 
     if selected_character and selected_character != "<Todos>":
