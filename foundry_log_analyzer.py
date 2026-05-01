@@ -20,6 +20,10 @@ DAMAGE_TYPE_PATTERN = re.compile(
 )
 PHYSICAL_DAMAGE_TYPES = {"bludgeoning", "piercing", "slashing", "poison"}
 
+# Padrão para rolagens de d20: "1d20 = 4 = 4" ou "1d20 + 7 = 4 + 7 = 11"
+D20_SIMPLE = re.compile(r"^1d20\s*=\s*(\d+)\s*=\s*\d+\s*$")
+D20_MODIFIER = re.compile(r"^1d20\s*\+\s*\d+\s*=\s*(\d+)\s*\+\s*\d+\s*=\s*\d+\s*$")
+
 def parse_log_line(line, current_player=None):
     """
     Parses a single line from the Foundry log file to extract relevant event data.
@@ -64,6 +68,21 @@ def parse_log_line(line, current_player=None):
                 'damage_type': category,
             }
 
+    # Parse d20 rolls
+    if D20_SIMPLE.match(line) or D20_MODIFIER.match(line):
+        if D20_MODIFIER.match(line):
+            match = D20_MODIFIER.match(line)
+            natural = int(match.group(1))
+        else:
+            match = D20_SIMPLE.match(line)
+            natural = int(match.group(1))
+        if current_player:
+            return {
+                'type': 'd20_roll',
+                'source': current_player,
+                'natural': natural,
+            }
+
     return None
 
 def aggregate_stats(events):
@@ -83,7 +102,10 @@ def aggregate_stats(events):
         'damage_caused_physical': 0,
         'damage_caused_magical': 0,
         'damage_received': 0,
-        'healing': 0
+        'healing': 0,
+        'd20_total': 0,
+        'd20_ones': 0,
+        'd20_twenties': 0,
     })
 
     for event in events:
@@ -105,6 +127,14 @@ def aggregate_stats(events):
             source = event['source']
             value = event['value']
             character_stats[source]['healing'] += value
+        elif event_type == 'd20_roll':
+            source = event['source']
+            natural = event['natural']
+            character_stats[source]['d20_total'] += 1
+            if natural == 1:
+                character_stats[source]['d20_ones'] += 1
+            elif natural == 20:
+                character_stats[source]['d20_twenties'] += 1
     return character_stats
 
 def get_player_from_header(line):
