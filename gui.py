@@ -157,6 +157,7 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
             ax.bar([i - width/2 for i in x], char1_vals, width, label=selected_character, color="#3498db")
             ax.bar([i + width/2 for i in x], char2_vals, width, label=compare_character, color="#e74c3c")
             ax.set_title(f"{selected_character} vs {compare_character}", fontsize=10)
+            ax.legend()
         elif selected_character and selected_character != "<Todos>":
             char_data = all_stats.get(selected_character, {})
             labels = ["d20 Total", "1s", "20s"]
@@ -169,6 +170,7 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
             ax.bar([i - width/2 for i in x], vals, width, label=selected_character, color="#3498db")
             ax.bar([i + width/2 for i in x], total_vals, width, label="Total", color="#95a5a6")
             ax.set_title(f"{selected_character} vs Total", fontsize=10)
+            ax.legend()
         else:
             labels = ["d20 Total", "1s", "20s"]
             vals = [sum(s.get("d20_total", 0) for s in all_stats.values()),
@@ -180,10 +182,10 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
         ax.set_ylabel("Quantidade")
         ax.legend()
         # Show values on bars
-        for i, (bar, val) in enumerate(zip(ax.patches, vals if chart_type == "d20 (1s e 20s)" and not (compare_character and compare_character != "<Nenhum>") and not (selected_character and selected_character != "<Todos>") else ([p.get_height() for p in ax.patches])):
-            if val > 0:
+        for bar in ax.patches:
+            if bar.get_height() > 0:
                 ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                        str(int(val)), ha="center", va="bottom", fontsize=9)
+                        str(int(bar.get_height())), ha="center", va="bottom", fontsize=9)
     else:
         # Dano/Cura chart - normal chart
         if compare_character and compare_character != "<Nenhum>":
@@ -199,6 +201,7 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
             ax.bar([i - width/2 for i in x], char1_vals, width, label=selected_character, color="#3498db")
             ax.bar([i + width/2 for i in x], char2_vals, width, label=compare_character, color="#e74c3c")
             ax.set_title(f"{selected_character} vs {compare_character}", fontsize=10)
+            ax.legend()
         elif selected_character and selected_character != "<Todos>":
             char_data = all_stats.get(selected_character, {})
             labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura"]
