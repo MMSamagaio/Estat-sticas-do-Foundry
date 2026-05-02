@@ -179,8 +179,12 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
                    sum(s.get("d20_ones", 0) for s in all_stats.values()),
                    sum(s.get("d20_twenties", 0) for s in all_stats.values())]
             colors = ["#9b59b6", "#f1c40f", "#1abc9c"]
-            ax.bar(labels, vals, color=colors)
+            bars = ax.bar(labels, vals, color=colors)
             ax.set_title("Rolagens de d20 (Combinado)", fontsize=10)
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
+                        str(int(height)), ha="center", va="bottom", fontsize=10)
         ax.set_ylabel("Quantidade")
         ax.legend()
         # Show values on bars
@@ -220,6 +224,9 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
             ax.bar([i - width/2 for i in x], vals, width, label=selected_character, color="#3498db")
             ax.bar([i + width/2 for i in x], total_vals, width, label="Total", color="#95a5a6")
             ax.set_title(f"{selected_character} vs Total", fontsize=10)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.legend(loc='upper right', fontsize=9)
         else:
             labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
             vals = [sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
@@ -227,8 +234,14 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
                     sum(s.get("damage_received", 0) for s in all_stats.values()),
                     sum(s.get("healing", 0) for s in all_stats.values())]
             colors = ["#e74c3c", "#3498db", "#e67e22", "#2ecc71"]
-            ax.bar(labels, vals, color=colors)
+            bars = ax.bar(labels, vals, color=colors)
             ax.set_title("Estatísticas Combinadas", fontsize=10)
+            ax.set_xticks(range(len(labels)))
+            ax.set_xticklabels(labels)
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
+                        str(int(height)), ha="center", va="bottom", fontsize=10)
         ax.set_ylabel("Valor")
         ax.legend()
         max_val = max([p.get_height() for p in ax.patches]) if ax.patches else 10
