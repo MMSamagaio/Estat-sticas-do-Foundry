@@ -172,6 +172,8 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
             ax.bar([i - width/2 for i in x], vals, width, label=selected_character, color="#3498db")
             ax.bar([i + width/2 for i in x], total_vals, width, label="Total", color="#95a5a6")
             ax.set_title(f"{selected_character} vs Total", fontsize=10)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
             ax.legend(loc='upper right', fontsize=9)
         else:
             labels = ["d20 Total", "1s", "20s"]
