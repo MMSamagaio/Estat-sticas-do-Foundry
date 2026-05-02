@@ -181,17 +181,14 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
             colors = ["#9b59b6", "#f1c40f", "#1abc9c"]
             bars = ax.bar(labels, vals, color=colors)
             ax.set_title("Rolagens de d20 (Combinado)", fontsize=10)
+            ax.set_xticks(range(len(labels)))
+            ax.set_xticklabels(labels)
             for bar in bars:
                 height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
-                        str(int(height)), ha="center", va="bottom", fontsize=10)
+                if height > 0:
+                    ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
+                            str(int(height)), ha="center", va="bottom", fontsize=10)
         ax.set_ylabel("Quantidade")
-        ax.legend()
-        # Show values on bars
-        for bar in ax.patches:
-            if bar.get_height() > 0:
-                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                        str(int(bar.get_height())), ha="center", va="bottom", fontsize=9)
     else:
         # Dano/Cura chart - normal chart
         if compare_character and compare_character != "<Nenhum>":
