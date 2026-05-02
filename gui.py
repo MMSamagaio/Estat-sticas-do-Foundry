@@ -157,7 +157,9 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
             ax.bar([i - width/2 for i in x], char1_vals, width, label=selected_character, color="#3498db")
             ax.bar([i + width/2 for i in x], char2_vals, width, label=compare_character, color="#e74c3c")
             ax.set_title(f"{selected_character} vs {compare_character}", fontsize=10)
-            ax.legend()
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.legend(loc='upper right', fontsize=9)
         elif selected_character and selected_character != "<Todos>":
             char_data = all_stats.get(selected_character, {})
             labels = ["d20 Total", "1s", "20s"]
@@ -201,7 +203,9 @@ def draw_bar_chart(window, selected_character, all_stats, compare_character=None
             ax.bar([i - width/2 for i in x], char1_vals, width, label=selected_character, color="#3498db")
             ax.bar([i + width/2 for i in x], char2_vals, width, label=compare_character, color="#e74c3c")
             ax.set_title(f"{selected_character} vs {compare_character}", fontsize=10)
-            ax.legend()
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.legend(loc='upper right', fontsize=9)
         elif selected_character and selected_character != "<Todos>":
             char_data = all_stats.get(selected_character, {})
             labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura"]
