@@ -131,8 +131,8 @@ def create_window():
     )
 
 
-def draw_bar_chart(window, selected_character, all_stats):
-    """Draws bar chart for selected character or all combined."""
+def draw_bar_chart(window, selected_character, all_stats, compare_character=None):
+    """Draws bar chart for selected character or all combined, or comparison."""
     if not all_stats:
         return
 
@@ -144,7 +144,54 @@ def draw_bar_chart(window, selected_character, all_stats):
     fig = plt.figure(figsize=(8, 5), dpi=80)
     ax = fig.add_subplot(111)
 
-    if selected_character and selected_character != "<Todos>":
+    # If comparing two characters
+    if compare_character and compare_character != "<Nenhum>":
+        char1_data = all_stats.get(selected_character, {})
+        char2_data = all_stats.get(compare_character, {})
+        labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura", "d20\nTotal", "1s", "20s"]
+        char1_vals = [
+            char1_data.get("damage_caused_physical", 0),
+            char1_data.get("damage_caused_magical", 0),
+            char1_data.get("damage_received", 0),
+            char1_data.get("healing", 0),
+            char1_data.get("d20_total", 0),
+            char1_data.get("d20_ones", 0),
+            char1_data.get("d20_twenties", 0),
+        ]
+        char2_vals = [
+            char2_data.get("damage_caused_physical", 0),
+            char2_data.get("damage_caused_magical", 0),
+            char2_data.get("damage_received", 0),
+            char2_data.get("healing", 0),
+            char2_data.get("d20_total", 0),
+            char2_data.get("d20_ones", 0),
+            char2_data.get("d20_twenties", 0),
+        ]
+
+        x = range(len(labels))
+        width = 0.35
+        bars1 = ax.bar([i - width/2 for i in x], char1_vals, width, label=selected_character, color="#3498db")
+        bars2 = ax.bar([i + width/2 for i in x], char2_vals, width, label=compare_character, color="#e74c3c")
+
+        ax.set_title(f"{selected_character} vs {compare_character}", fontsize=10)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels)
+        ax.legend()
+
+        for bar, val in zip(bars1, char1_vals):
+            if val > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        str(val), ha="center", va="bottom", fontsize=8)
+        for bar, val in zip(bars2, char2_vals):
+            if val > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        str(val), ha="center", va="bottom", fontsize=8)
+
+        ax.set_ylabel("Valor")
+        max_val = max(max(char1_vals), max(char2_vals)) if char1_vals or char2_vals else 10
+        ax.set_ylim(0, max_val * 1.2)
+
+    elif selected_character and selected_character != "<Todos>":
         # Show comparison: Player vs Total (filtered total for the date)
         total_data = all_stats.get(selected_character, {})
         labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura", "d20\nTotal", "1s", "20s"]
@@ -298,20 +345,28 @@ def update_display(window):
         ])
 
     # Show normal table or comparison table
-    if compare_char and compare_char != "<Nenhum>":
-        compare_rows = build_comparison_rows(selected_char, compare_char, stats)
-        window["-TABLE-"].update(visible=False)
-        window["-COMPARE_TABLE-"].update(
-            headings=["Estatística", selected_char, compare_char],
-            values=compare_rows,
-            visible=True
-        )
-    else:
-        window["-TABLE-"].update(values=table_rows, visible=True)
-        window["-COMPARE_TABLE-"].update(visible=False)
+    try:
+        if compare_char and compare_char != "<Nenhum>":
+            compare_rows = build_comparison_rows(selected_char, compare_char, stats)
+            window["-TABLE-"].update(visible=False)
+            window["-COMPARE_TABLE-"].update(
+                headings=["Estatística", selected_char, compare_char],
+                values=compare_rows,
+                visible=True
+            )
+        else:
+            window["-TABLE-"].update(values=table_rows, visible=True)
+            window["-COMPARE_TABLE-"].update(visible=False)
+    except Exception as e:
+        print(f"Table update error: {e}")
+        sg.popup_error(f"Erro ao atualizar tabela: {e}")
 
     # Draw chart
-    draw_bar_chart(window, selected_char, stats)
+    try:
+        draw_bar_chart(window, selected_char, stats, compare_char)
+    except Exception as e:
+        print(f"Chart error: {e}")
+        sg.popup_error(f"Erro ao desenhar gráfico: {e}")
 
 
 def build_comparison_rows(char1, char2, stats):
