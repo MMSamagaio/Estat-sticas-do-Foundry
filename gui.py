@@ -94,20 +94,31 @@ def create_window():
         [sg.Button("Analisar", key="-ANALYZE-")],
         [sg.HorizontalSeparator()],
         [sg.Text("Filtrar por data:"), sg.Combo(["<Todos>"], key="-DATE_SELECT-", size=(15, 1), readonly=True, enable_events=True, disabled=True),
-         sg.Text("  Personagem:"), sg.Combo(["<Todos>"], key="-CHAR_SELECT-", size=(20, 1), readonly=True, enable_events=True, disabled=True)],
+         sg.Text("  Personagem:"), sg.Combo(["<Todos>"], key="-CHAR_SELECT-", size=(20, 1), readonly=True, enable_events=True, disabled=True),
+         sg.Text("  Comparar com:"), sg.Combo(["<Nenhum>"], key="-COMPARE-", size=(20, 1), readonly=True, enable_events=True, disabled=True)],
         [sg.HorizontalSeparator()],
         [sg.Text("Dados:", font=("Helvetica", 12))],
         [sg.Table(
-            headings=["Personagem", "Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"],
+            headings=["Personagem", "Dano Físico", "Dano Mágico", "Dano Recebido", "Cura", "d20 Total", "1s", "20s"],
             key="-TABLE-",
             values=[],
             num_rows=8,
             auto_size_columns=True,
             justification="left",
             alternating_row_color="gray30",
+        ),
+        sg.Table(
+            headings=["Estatística", "", ""],
+            key="-COMPARE_TABLE-",
+            values=[],
+            num_rows=8,
+            auto_size_columns=True,
+            justification="left",
+            alternating_row_color="gray30",
+            visible=False,
         )],
         [sg.HorizontalSeparator()],
-        [sg.Text("Gráfico:", font=("Helvetica", 12))],
+        [sg.Text("Gráfico:"), sg.Combo(["Dano/Cura", "d20 (1s e 20s)"], key="-CHART_TYPE-", size=(15, 1), readonly=True, enable_events=True, default_value="Dano/Cura")],
         [sg.Canvas(key="-CHART-", size=(650, 400))],
     ]
 
@@ -120,8 +131,8 @@ def create_window():
     )
 
 
-def draw_bar_chart(window, selected_character, all_stats):
-    """Draws bar chart for selected character or all combined."""
+def draw_bar_chart(window, selected_character, all_stats, compare_character=None, chart_type="Dano/Cura"):
+    """Draws bar chart for selected character or all combined, or comparison."""
     if not all_stats:
         return
 
@@ -133,64 +144,111 @@ def draw_bar_chart(window, selected_character, all_stats):
     fig = plt.figure(figsize=(8, 5), dpi=80)
     ax = fig.add_subplot(111)
 
-    if selected_character and selected_character != "<Todos>":
-        # Show comparison: Player vs Total (filtered total for the date)
-        total_data = all_stats.get(selected_character, {})
-        labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura"]
-        player_vals = [
-            total_data.get("damage_caused_physical", 0),
-            total_data.get("damage_caused_magical", 0),
-            total_data.get("damage_received", 0),
-            total_data.get("healing", 0),
-        ]
-        total_vals = [
-            sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
-            sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
-            sum(s.get("damage_received", 0) for s in all_stats.values()),
-            sum(s.get("healing", 0) for s in all_stats.values()),
-        ]
-
-        x = range(len(labels))
-        width = 0.35
-        bars1 = ax.bar([i - width/2 for i in x], player_vals, width, label=selected_character, color="#3498db")
-        bars2 = ax.bar([i + width/2 for i in x], total_vals, width, label="Total", color="#95a5a6")
-
-        ax.set_title(f"{selected_character} vs Total", fontsize=10)
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels)
-        ax.legend()
-
-        # Add value labels
-        for bar, val in zip(bars1, player_vals):
-            if val > 0:
-                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                        str(val), ha="center", va="bottom", fontsize=8)
-        for bar, val in zip(bars2, total_vals):
-            if val > 0:
-                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                        str(val), ha="center", va="bottom", fontsize=8)
-
-        ax.set_ylabel("Valor")
-        max_val = max(max(player_vals), max(total_vals)) if player_vals or total_vals else 10
-        ax.set_ylim(0, max_val * 1.2)
+    if chart_type == "d20 (1s e 20s)":
+        # d20 chart only - separate from damage/cure
+        if compare_character and compare_character != "<Nenhum>":
+            char1_data = all_stats.get(selected_character, {})
+            char2_data = all_stats.get(compare_character, {})
+            labels = ["d20 Total", "1s", "20s"]
+            char1_vals = [char1_data.get("d20_total", 0), char1_data.get("d20_ones", 0), char1_data.get("d20_twenties", 0)]
+            char2_vals = [char2_data.get("d20_total", 0), char2_data.get("d20_ones", 0), char2_data.get("d20_twenties", 0)]
+            x = range(len(labels))
+            width = 0.35
+            ax.bar([i - width/2 for i in x], char1_vals, width, label=selected_character, color="#3498db")
+            ax.bar([i + width/2 for i in x], char2_vals, width, label=compare_character, color="#e74c3c")
+            ax.set_title(f"{selected_character} vs {compare_character}", fontsize=10)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.legend(loc='upper right', fontsize=9)
+        elif selected_character and selected_character != "<Todos>":
+            char_data = all_stats.get(selected_character, {})
+            labels = ["d20 Total", "1s", "20s"]
+            vals = [char_data.get("d20_total", 0), char_data.get("d20_ones", 0), char_data.get("d20_twenties", 0)]
+            total_vals = [sum(s.get("d20_total", 0) for s in all_stats.values()),
+                         sum(s.get("d20_ones", 0) for s in all_stats.values()),
+                         sum(s.get("d20_twenties", 0) for s in all_stats.values())]
+            x = range(len(labels))
+            width = 0.35
+            ax.bar([i - width/2 for i in x], vals, width, label=selected_character, color="#3498db")
+            ax.bar([i + width/2 for i in x], total_vals, width, label="Total", color="#95a5a6")
+            ax.set_title(f"{selected_character} vs Total", fontsize=10)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.legend(loc='upper right', fontsize=9)
+        else:
+            labels = ["d20 Total", "1s", "20s"]
+            vals = [sum(s.get("d20_total", 0) for s in all_stats.values()),
+                   sum(s.get("d20_ones", 0) for s in all_stats.values()),
+                   sum(s.get("d20_twenties", 0) for s in all_stats.values())]
+            colors = ["#9b59b6", "#f1c40f", "#1abc9c"]
+            bars = ax.bar(labels, vals, color=colors)
+            ax.set_title("Rolagens de d20 (Combinado)", fontsize=10)
+            ax.set_xticks(range(len(labels)))
+            ax.set_xticklabels(labels)
+            for bar in bars:
+                height = bar.get_height()
+                if height > 0:
+                    ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
+                            str(int(height)), ha="center", va="bottom", fontsize=10)
+        ax.set_ylabel("Quantidade")
     else:
-        # Show all combined
-        values = [
-            sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
-            sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
-            sum(s.get("damage_received", 0) for s in all_stats.values()),
-            sum(s.get("healing", 0) for s in all_stats.values()),
-        ]
-        labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
-        bars = ax.bar(labels, values, color=["#e74c3c", "#3498db", "#e67e22", "#2ecc71"])
-        ax.set_title("Estatísticas Combinadas", fontsize=10)
+        # Dano/Cura chart - normal chart
+        if compare_character and compare_character != "<Nenhum>":
+            char1_data = all_stats.get(selected_character, {})
+            char2_data = all_stats.get(compare_character, {})
+            labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura"]
+            char1_vals = [char1_data.get("damage_caused_physical", 0), char1_data.get("damage_caused_magical", 0),
+                          char1_data.get("damage_received", 0), char1_data.get("healing", 0)]
+            char2_vals = [char2_data.get("damage_caused_physical", 0), char2_data.get("damage_caused_magical", 0),
+                         char2_data.get("damage_received", 0), char2_data.get("healing", 0)]
+            x = range(len(labels))
+            width = 0.35
+            ax.bar([i - width/2 for i in x], char1_vals, width, label=selected_character, color="#3498db")
+            ax.bar([i + width/2 for i in x], char2_vals, width, label=compare_character, color="#e74c3c")
+            ax.set_title(f"{selected_character} vs {compare_character}", fontsize=10)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.legend(loc='upper right', fontsize=9)
+        elif selected_character and selected_character != "<Todos>":
+            char_data = all_stats.get(selected_character, {})
+            labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura"]
+            vals = [char_data.get("damage_caused_physical", 0), char_data.get("damage_caused_magical", 0),
+                    char_data.get("damage_received", 0), char_data.get("healing", 0)]
+            total_vals = [sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
+                         sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
+                         sum(s.get("damage_received", 0) for s in all_stats.values()),
+                         sum(s.get("healing", 0) for s in all_stats.values())]
+            x = range(len(labels))
+            width = 0.35
+            ax.bar([i - width/2 for i in x], vals, width, label=selected_character, color="#3498db")
+            ax.bar([i + width/2 for i in x], total_vals, width, label="Total", color="#95a5a6")
+            ax.set_title(f"{selected_character} vs Total", fontsize=10)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.legend(loc='upper right', fontsize=9)
+        else:
+            labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
+            vals = [sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
+                    sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
+                    sum(s.get("damage_received", 0) for s in all_stats.values()),
+                    sum(s.get("healing", 0) for s in all_stats.values())]
+            colors = ["#e74c3c", "#3498db", "#e67e22", "#2ecc71"]
+            bars = ax.bar(labels, vals, color=colors)
+            ax.set_title("Estatísticas Combinadas", fontsize=10)
+            ax.set_xticks(range(len(labels)))
+            ax.set_xticklabels(labels)
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
+                        str(int(height)), ha="center", va="bottom", fontsize=10)
         ax.set_ylabel("Valor")
-        max_val = max(values) if values else 10
+        ax.legend()
+        max_val = max([p.get_height() for p in ax.patches]) if ax.patches else 10
         ax.set_ylim(0, max_val * 1.2)
-        for bar, val in zip(bars, values):
-            if val > 0:
+        for bar in ax.patches:
+            if bar.get_height() > 0:
                 ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                        str(val), ha="center", va="bottom", fontsize=9)
+                        str(int(bar.get_height())), ha="center", va="bottom", fontsize=9)
 
     fig.tight_layout()
 
@@ -235,6 +293,7 @@ def update_display(window):
 
     selected_date = values.get("-DATE_SELECT-", "<Todos>")
     selected_char = values.get("-CHAR_SELECT-", "<Todos>")
+    compare_char = values.get("-COMPARE-", "<Nenhum>")
 
     events = metadata['events']
     stats = metadata['stats']
@@ -254,6 +313,13 @@ def update_display(window):
         selected_char = "<Todos>"
     window["-CHAR_SELECT-"].update(values=characters, value=selected_char, disabled=False)
 
+    # Update compare dropdown - only enabled when a specific character is selected
+    if selected_char and selected_char != "<Todos>":
+        compare_options = ["<Nenhum>"] + [c for c in stats.keys() if c != selected_char]
+        window["-COMPARE-"].update(values=compare_options, value="<Nenhum>", disabled=False)
+    else:
+        window["-COMPARE-"].update(values=["<Nenhum>"], value="<Nenhum>", disabled=True)
+
     # Build table rows
     table_rows = []
     for character, s in stats.items():
@@ -263,12 +329,50 @@ def update_display(window):
             s["damage_caused_magical"],
             s["damage_received"],
             s["healing"],
+            s.get("d20_total", 0),
+            s.get("d20_ones", 0),
+            s.get("d20_twenties", 0),
         ])
 
-    window["-TABLE-"].update(values=table_rows)
+    # Show normal table or comparison table
+    try:
+        if compare_char and compare_char != "<Nenhum>":
+            compare_rows = build_comparison_rows(selected_char, compare_char, stats)
+            window["-TABLE-"].update(visible=False)
+            window["-COMPARE_TABLE-"].update(
+                values=compare_rows,
+                visible=True
+            )
+        else:
+            window["-TABLE-"].update(values=table_rows, visible=True)
+            window["-COMPARE_TABLE-"].update(visible=False)
+    except Exception as e:
+        print(f"Table update error: {e}")
+        sg.popup_error(f"Erro ao atualizar tabela: {e}")
 
     # Draw chart
-    draw_bar_chart(window, selected_char, stats)
+    try:
+        chart_type = values.get("-CHART_TYPE-", "Dano/Cura")
+        draw_bar_chart(window, selected_char, stats, compare_char, chart_type)
+    except Exception as e:
+        print(f"Chart error: {e}")
+        sg.popup_error(f"Erro ao desenhar gráfico: {e}")
+
+
+def build_comparison_rows(char1, char2, stats):
+    """Builds side-by-side comparison rows for two characters."""
+    s1 = stats.get(char1, {})
+    s2 = stats.get(char2, {})
+
+    return [
+        ["Dano Físico", s1.get("damage_caused_physical", 0), s2.get("damage_caused_physical", 0)],
+        ["Dano Mágico", s1.get("damage_caused_magical", 0), s2.get("damage_caused_magical", 0)],
+        ["Dano Recebido", s1.get("damage_received", 0), s2.get("damage_received", 0)],
+        ["Cura", s1.get("healing", 0), s2.get("healing", 0)],
+        ["d20 Total", s1.get("d20_total", 0), s2.get("d20_total", 0)],
+        ["1s", s1.get("d20_ones", 0), s2.get("d20_ones", 0)],
+        ["20s", s1.get("d20_twenties", 0), s2.get("d20_twenties", 0)],
+    ]
 
 
 def main():
@@ -290,7 +394,7 @@ def main():
             else:
                 sg.popup("Selecione um arquivo primeiro.")
 
-        if event in ("-DATE_SELECT-", "-CHAR_SELECT-"):
+        if event in ("-DATE_SELECT-", "-CHAR_SELECT-", "-COMPARE-", "-CHART_TYPE-"):
             if window.metadata:
                 update_display(window)
 

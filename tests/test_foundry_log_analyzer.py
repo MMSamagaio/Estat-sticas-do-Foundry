@@ -96,10 +96,10 @@ class TestDamageCaused:
             'damage_type': 'magical',
         }
 
-    def test_attack_roll_ignored(self):
-        # 1d20 has the = N = N format but no damage type → must be ignored
+    def test_d20_roll_captured(self):
+        # 1d20 = N = N format is now captured as d20_roll event
         result = parse_log_line("1d20 = 4 = 4", current_player="MAiron")
-        assert result is None
+        assert result == {'type': 'd20_roll', 'source': 'MAiron', 'natural': 4}
 
     def test_untyped_roll_ignored(self):
         # Roll without explicit damage type → ignore
