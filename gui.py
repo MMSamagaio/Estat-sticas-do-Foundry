@@ -350,7 +350,6 @@ def update_display(window):
             compare_rows = build_comparison_rows(selected_char, compare_char, stats)
             window["-TABLE-"].update(visible=False)
             window["-COMPARE_TABLE-"].update(
-                headings=["Estatística", selected_char, compare_char],
                 values=compare_rows,
                 visible=True
             )
