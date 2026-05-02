@@ -69,13 +69,8 @@ def parse_log_line(line, current_player=None):
             }
 
     # Parse d20 rolls
-    if D20_SIMPLE.match(line) or D20_MODIFIER.match(line):
-        if D20_MODIFIER.match(line):
-            match = D20_MODIFIER.match(line)
-            natural = int(match.group(1))
-        else:
-            match = D20_SIMPLE.match(line)
-            natural = int(match.group(1))
+    if match := D20_MODIFIER.match(line) or D20_SIMPLE.match(line):
+        natural = int(match.group(1))
         if current_player:
             return {
                 'type': 'd20_roll',
@@ -244,6 +239,10 @@ def main():
         print(f"    - Mágico: {stats['damage_caused_magical']}")
         print(f"  - Dano Recebido: {stats['damage_received']}")
         print(f"  - Cura Realizada: {stats['healing']}")
+        print(f"  - Rolagens d20:")
+        print(f"    - Total: {stats['d20_total']}")
+        print(f"    - 1s: {stats['d20_ones']}")
+        print(f"    - 20s: {stats['d20_twenties']}")
         print()
 
 if __name__ == "__main__":

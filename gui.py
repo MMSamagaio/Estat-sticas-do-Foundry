@@ -147,18 +147,24 @@ def draw_bar_chart(window, selected_character, all_stats):
     if selected_character and selected_character != "<Todos>":
         # Show comparison: Player vs Total (filtered total for the date)
         total_data = all_stats.get(selected_character, {})
-        labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura"]
+        labels = ["Dano\nFísico", "Dano\nMágico", "Dano\nRecebido", "Cura", "d20\nTotal", "1s", "20s"]
         player_vals = [
             total_data.get("damage_caused_physical", 0),
             total_data.get("damage_caused_magical", 0),
             total_data.get("damage_received", 0),
             total_data.get("healing", 0),
+            total_data.get("d20_total", 0),
+            total_data.get("d20_ones", 0),
+            total_data.get("d20_twenties", 0),
         ]
         total_vals = [
             sum(s.get("damage_caused_physical", 0) for s in all_stats.values()),
             sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
             sum(s.get("damage_received", 0) for s in all_stats.values()),
             sum(s.get("healing", 0) for s in all_stats.values()),
+            sum(s.get("d20_total", 0) for s in all_stats.values()),
+            sum(s.get("d20_ones", 0) for s in all_stats.values()),
+            sum(s.get("d20_twenties", 0) for s in all_stats.values()),
         ]
 
         x = range(len(labels))
@@ -191,9 +197,13 @@ def draw_bar_chart(window, selected_character, all_stats):
             sum(s.get("damage_caused_magical", 0) for s in all_stats.values()),
             sum(s.get("damage_received", 0) for s in all_stats.values()),
             sum(s.get("healing", 0) for s in all_stats.values()),
+            sum(s.get("d20_total", 0) for s in all_stats.values()),
+            sum(s.get("d20_ones", 0) for s in all_stats.values()),
+            sum(s.get("d20_twenties", 0) for s in all_stats.values()),
         ]
-        labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura"]
-        bars = ax.bar(labels, values, color=["#e74c3c", "#3498db", "#e67e22", "#2ecc71"])
+        labels = ["Dano Físico", "Dano Mágico", "Dano Recebido", "Cura", "d20 Total", "1s", "20s"]
+        colors = ["#e74c3c", "#3498db", "#e67e22", "#2ecc71", "#9b59b6", "#f1c40f", "#1abc9c"]
+        bars = ax.bar(labels, values, color=colors)
         ax.set_title("Estatísticas Combinadas", fontsize=10)
         ax.set_ylabel("Valor")
         max_val = max(values) if values else 10
